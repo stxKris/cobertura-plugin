@@ -1,10 +1,14 @@
 package hudson.plugins.cobertura;
 
+import hudson.EnvVars;
 import hudson.AbortException;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
 import hudson.Util;
+import hudson.matrix.MatrixAggregatable;
+import hudson.matrix.MatrixAggregator;
+import hudson.matrix.MatrixBuild;
 import hudson.model.Action;
 import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
@@ -54,7 +58,7 @@ import org.kohsuke.stapler.StaplerRequest;
  *
  * @author Stephen Connolly
  */
-public class CoberturaPublisher extends Recorder implements SimpleBuildStep {
+public class CoberturaPublisher extends Recorder implements SimpleBuildStep, MatrixAggregatable {
 
     private String coberturaReportFile;
 
@@ -365,6 +369,13 @@ public class CoberturaPublisher extends Recorder implements SimpleBuildStep {
         return build.getRootDir().listFiles(COBERTURA_FILENAME_FILTER);
     }
 
+    public MatrixAggregator createAggregator(
+            final MatrixBuild build,
+            final Launcher launcher,
+            final BuildListener listener) {
+        return new CoberturaMatrixAggregator(build, launcher, listener, this);
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -381,10 +392,13 @@ public class CoberturaPublisher extends Recorder implements SimpleBuildStep {
         listener.getLogger().println("[Cobertura] Publishing Cobertura coverage report...");
         final File buildCoberturaDir = build.getRootDir();
         FilePath buildTarget = new FilePath(buildCoberturaDir);
+        
+        final EnvVars env = build.getEnvironment(listener);        
+        String expandedString = env.expand(coberturaReportFile);
 
         FilePath[] reports = null;
         try {
-            reports = workspace.act(new ParseReportCallable(coberturaReportFile));
+            reports = workspace.act(new ParseReportCallable(expandedString));
 
             // if the build has failed, then there's not
             // much point in reporting an error
